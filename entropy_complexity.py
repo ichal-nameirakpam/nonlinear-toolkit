@@ -70,6 +70,58 @@ def _pattern_distribution(series, dx=4, taux=1):
     probs = counts / counts.sum()
     return probs
 
+def entropy_from_distribution(probs, N_states, normalize=True):
+    """
+    Shannon entropy of an arbitrary probability distribution over
+    N_states outcomes, optionally normalized by log(N_states).
+
+    Used both for permutation_entropy (probs = observed ordinal
+    pattern distribution) and for the H x C plane boundary curves
+    (probs = synthetic extremal distributions).
+    """
+    probs = np.asarray(probs)
+    probs_nonzero = probs[probs > 0]
+    H = -np.sum(probs_nonzero * np.log(probs_nonzero))
+    if normalize:
+        H = H / np.log(N_states)
+    return H
+
+
+def complexity_from_distribution(probs, N_states):
+    """
+    Jensen-Shannon statistical complexity of an arbitrary
+    probability distribution over N_states outcomes
+    (Lopez-Ruiz, Mancini & Calbet 1995; Rosso et al. 2007 MPR form).
+
+    C = Q_J * H_normalized, where Q_J is the (normalized)
+    Jensen-Shannon divergence between probs and the uniform
+    distribution.
+    """
+    probs = np.asarray(probs)
+    H_norm = entropy_from_distribution(probs, N_states, normalize=True)
+
+    p_uniform = np.full(N_states, 1.0 / N_states)
+    p_mix = 0.5 * (probs + p_uniform)
+
+    def shannon(p):
+        p_nz = p[p > 0]
+        return -np.sum(p_nz * np.log(p_nz))
+
+    S_mix = shannon(p_mix)
+    S_p = shannon(probs)
+    S_uniform = shannon(p_uniform)  # = log(N_states)
+
+    J = S_mix - 0.5 * S_p - 0.5 * S_uniform
+
+    Q_max = -0.5 * (
+        ((N_states + 1) / N_states) * np.log(N_states + 1)
+        + np.log(N_states)
+        - 2 * np.log(2 * N_states)
+    )
+
+    Q_J = J / Q_max
+    return Q_J * H_norm
+
 
 def permutation_entropy(series, dx=4, taux=1, normalize=True):
     """
@@ -94,26 +146,13 @@ def permutation_entropy(series, dx=4, taux=1, normalize=True):
     H : float
     """
     probs = _pattern_distribution(series, dx=dx, taux=taux)
-    probs_nonzero = probs[probs > 0]
-
-    H = -np.sum(probs_nonzero * np.log(probs_nonzero))
-
-    if normalize:
-        H_max = np.log(math.factorial(dx))
-        H = H / H_max
-    return H
+    return entropy_from_distribution(probs, math.factorial(dx), normalize=normalize)
 
 
 def statistical_complexity(series, dx=4, taux=1):
     """
     Jensen-Shannon statistical complexity C of a time series
     (Lopez-Ruiz, Mancini & Calbet 1995; Rosso et al. 2007 MPR form).
-
-    C = Q_J * H_normalized
-
-    where Q_J is the Jensen-Shannon "disequilibrium" between the
-    pattern distribution P and the uniform distribution P_e,
-    normalized by its maximum possible value Q_max.
 
     Parameters
     ----------
@@ -131,35 +170,8 @@ def statistical_complexity(series, dx=4, taux=1):
         series; C peaks for intermediate, structured-but-not-
         periodic dynamics (e.g. chaos).
     """
-    N_states = math.factorial(dx)
     probs = _pattern_distribution(series, dx=dx, taux=taux)
-    H_norm = permutation_entropy(series, dx=dx, taux=taux, normalize=True)
-
-    p_uniform = np.full(N_states, 1.0 / N_states)
-
-    # Jensen-Shannon divergence between P and uniform P_e
-    p_mix = 0.5 * (probs + p_uniform)
-
-    def shannon(p):
-        p_nz = p[p > 0]
-        return -np.sum(p_nz * np.log(p_nz))
-
-    S_mix = shannon(p_mix)
-    S_p = shannon(probs)
-    S_uniform = shannon(p_uniform)  # = log(N_states)
-
-    J = S_mix - 0.5 * S_p - 0.5 * S_uniform
-
-    # Normalization constant Q_max (Rosso et al. 2007)
-    Q_max = -0.5 * (
-        ((N_states + 1) / N_states) * np.log(N_states + 1)
-        + np.log(N_states)
-        - 2 * np.log(2 * N_states)
-    )
-
-    Q_J = J / Q_max
-    C = Q_J * H_norm
-    return C
+    return complexity_from_distribution(probs, math.factorial(dx))
 
 
 def h_c(series, dx=4, taux=1):
