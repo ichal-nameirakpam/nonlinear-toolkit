@@ -13,37 +13,7 @@ from small data sets." Physica D, 65(1-2), 117-134.
 
 import numpy as np
 
-
-def _embed(series, dim, tau):
-    """
-    Time-delay embedding: reconstruct phase space vectors from a
-    1D time series.
-
-    Parameters
-    ----------
-    series : array-like, shape (N,)
-    dim : int
-        Embedding dimension.
-    tau : int
-        Time delay.
-
-    Returns
-    -------
-    vectors : ndarray, shape (M, dim)
-        M = N - (dim - 1) * tau reconstructed phase-space vectors.
-    """
-    series = np.asarray(series)
-    N = len(series)
-    M = N - (dim - 1) * tau
-    if M <= 0:
-        raise ValueError(
-            f"Series too short for dim={dim}, tau={tau}: "
-            f"need at least {(dim - 1) * tau + 1} points, got {N}."
-        )
-    vectors = np.empty((M, dim))
-    for i in range(dim):
-        vectors[:, i] = series[i * tau: i * tau + M]
-    return vectors
+from embedding import embed
 
 
 def rosenstein_lyapunov(series, dim=4, tau=1, min_tsep=None,
@@ -93,7 +63,7 @@ def rosenstein_lyapunov(series, dim=4, tau=1, min_tsep=None,
         The averaged log-distance curve actually used in the fit
         (useful for plotting/diagnostics).
     """
-    vectors = _embed(series, dim, tau)
+    vectors = embed(series, dim, tau)
     M = len(vectors)
 
     if min_tsep is None:
